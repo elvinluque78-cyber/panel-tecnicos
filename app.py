@@ -14,12 +14,28 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 def get_db():
     return psycopg2.connect(DATABASE_URL)
 
-# Configuración de técnicos (usuario = nombre del técnico, contraseña = puede ser personalizada)
+# Configuración de técnicos actualizada
 TECNICOS_VALIDOS = {
     "Franyer": {"password": "franyer123", "nombre_completo": "Franyer Pérez"},
-    "Carlos": {"password": "carlos123", "nombre_completo": "Carlos López"},
-    "Luis": {"password": "luis123", "nombre_completo": "Luis Martínez"}
+    "Wilfredo": {"password": "wilfredo123", "nombre_completo": "Wilfredo Gómez"},
+    "Elvin": {"password": "elvin123", "nombre_completo": "Elvin Luque"},
+    "Santiago": {"password": "santiago123", "nombre_completo": "Santiago Rodríguez"}
 }
+
+# Nueva función para calcular comisión por tarjeta
+def calcular_comision(presupuesto):
+    """
+    Calcula la comisión según el presupuesto:
+    - Menos de 50: 5
+    - 60 o más: 10
+    """
+    if presupuesto < 50:
+        return 5
+    elif presupuesto >= 60:
+        return 10
+    else:
+        # Entre 50 y 59.99: comisión proporcional (opcional, ajustamos a 7.5)
+        return 7.5
 
 def requiere_autenticacion_tecnico(f):
     @wraps(f)
@@ -63,7 +79,7 @@ LOGIN_TECNICO = '''
 </html>
 '''
 
-# HTML Dashboard del técnico
+# HTML Dashboard del técnico (ACTUALIZADO con tarifas)
 DASHBOARD_TECNICO = '''
 <!DOCTYPE html>
 <html>
@@ -73,7 +89,7 @@ DASHBOARD_TECNICO = '''
     <title>Panel de {{ tecnico }}</title>
     <style>
         body { font-family: sans-serif; margin: 0; background: #f0f2f5; }
-        .header { background: #667eea; color: white; padding: 20px; text-align: center; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
         .container { max-width: 1200px; margin: 20px auto; padding: 20px; }
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
@@ -88,8 +104,11 @@ DASHBOARD_TECNICO = '''
         .estado-entregado { color: blue; font-weight: bold; }
         .logout { float: right; background: #e53e3e; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
         .logout:hover { background: #c53030; }
-        .btn { display: inline-block; background: #48bb78; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+        .btn { display: inline-block; background: #48bb78; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; }
         .btn:hover { background: #38a169; }
+        .tabla-comisiones { margin-top: 20px; background: white; padding: 15px; border-radius: 10px; }
+        .tabla-comisiones h3 { margin-top: 0; }
+        .info-comision { font-size: 12px; color: #666; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -108,13 +127,28 @@ DASHBOARD_TECNICO = '''
                 <div class="number">{{ entregadas }}</div>
             </div>
             <div class="card">
-                <h3>💰 Total Facturado (entregadas)</h3>
+                <h3>💰 Total Facturado</h3>
                 <div class="total">${{ total_facturado }}</div>
             </div>
             <div class="card">
-                <h3>💵 Comisión Estimada (30%)</h3>
+                <h3>💵 Comisión por Tarjeta</h3>
                 <div class="total">${{ comision }}</div>
             </div>
+        </div>
+        
+        <div class="tabla-comisiones">
+            <h3>📊 Tarifas de Comisión por Tarjeta</h3>
+            <table style="width: 100%; margin-top: 10px;">
+                <thead>
+                    <tr><th>Presupuesto</th><th>Comisión por Tarjeta</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Menos de $50</td><td><strong>$5</strong></td></tr>
+                    <tr><td>$50 a $59.99</td><td><strong>$7.50</strong></td></tr>
+                    <tr><td>$60 o más</td><td><strong>$10</strong></td></tr>
+                </tbody>
+            </table>
+            <div class="info-comision">💡 La comisión se calcula automáticamente según el presupuesto de cada ticket entregado.</div>
         </div>
         
         <h2>📋 Mis Reparaciones</h2>
@@ -126,6 +160,7 @@ DASHBOARD_TECNICO = '''
                     <th>Equipo</th>
                     <th>Estado</th>
                     <th>Presupuesto</th>
+                    <th>Comisión</th>
                     <th>Fecha Entrada</th>
                     <th>Fecha Entrega</th>
                 </tr>
@@ -138,6 +173,7 @@ DASHBOARD_TECNICO = '''
                     <td>{{ r[2] }} {{ r[3] }}</td>
                     <td class="estado-{{ r[4] }}">{{ r[4].replace('_', ' ').upper() }}</td>
                     <td>${{ r[5] if r[5] else 0 }}</td>
+                    <td>${{ r[8] if r[8] else 0 }}</td>
                     <td>{{ r[6][:10] if r[6] else '' }}</td>
                     <td>{{ r[7][:10] if r[7] else 'Pendiente' }}</td>
                 </tr>
@@ -180,7 +216,15 @@ def panel_tecnico():
         WHERE tecnico = %s 
         ORDER BY id DESC
     ''', (tecnico,))
-    reparaciones = cursor.fetchall()
+    reparaciones_raw = cursor.fetchall()
+    
+    # Calcular comisión por cada reparación entregada
+    reparaciones = []
+    for r in reparaciones_raw:
+        comision = 0
+        if r[4] == 'entregado' and r[5]:  # estado entregado y presupuesto existe
+            comision = calcular_comision(r[5])
+        reparaciones.append((r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], comision))
     
     # Estadísticas
     cursor.execute('''
@@ -198,9 +242,17 @@ def panel_tecnico():
     ''', (tecnico,))
     total_facturado = cursor.fetchone()[0] or 0
     
-    conn.close()
+    # Calcular comisión total usando la nueva tarifa
+    cursor.execute('''
+        SELECT presupuesto FROM reparaciones WHERE tecnico = %s AND estado = 'entregado' AND presupuesto IS NOT NULL
+    ''', (tecnico,))
+    presupuestos = cursor.fetchall()
     
-    comision = round(total_facturado * 0.30, 2)  # 30% comisión
+    comision_total = 0
+    for p in presupuestos:
+        comision_total += calcular_comision(p[0])
+    
+    conn.close()
     
     return render_template_string(DASHBOARD_TECNICO, 
                                    tecnico=tecnico,
@@ -208,8 +260,8 @@ def panel_tecnico():
                                    reparaciones=reparaciones,
                                    total_reparaciones=total_reparaciones,
                                    entregadas=entregadas,
-                                   total_facturado=total_facturado,
-                                   comision=comision)
+                                   total_facturado=round(total_facturado, 2),
+                                   comision=comision_total)
 
 @app.route("/logout")
 def logout():
@@ -239,10 +291,13 @@ def exportar_csv():
     # Crear CSV en memoria
     si = StringIO()
     cw = csv.writer(si)
-    cw.writerow(['Código', 'Cliente', 'Equipo', 'Marca', 'Falla', 'Estado', 'Presupuesto', 'Fecha Entrada', 'Fecha Salida'])
+    cw.writerow(['Código', 'Cliente', 'Equipo', 'Marca', 'Falla', 'Estado', 'Presupuesto', 'Comisión', 'Fecha Entrada', 'Fecha Salida'])
     
     for r in reparaciones:
-        cw.writerow([r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8] if r[8] else ''])
+        comision = 0
+        if r[5] == 'entregado' and r[6]:
+            comision = calcular_comision(r[6])
+        cw.writerow([r[0], r[1], r[2], r[3], r[4], r[5], r[6], comision, r[7], r[8] if r[8] else ''])
     
     output = si.getvalue()
     
@@ -252,10 +307,14 @@ def exportar_csv():
         headers={"Content-Disposition": f"attachment;filename=reparaciones_{tecnico}_{datetime.datetime.now().strftime('%Y%m%d')}.csv"}
     )
 
+@app.route("/ping")
+def ping():
+    return "OK", 200
+
 @app.route("/")
 def index():
     return redirect(url_for('login_tecnico'))
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port, debug=True)
