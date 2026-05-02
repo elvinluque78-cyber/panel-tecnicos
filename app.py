@@ -3,18 +3,16 @@ import psycopg2
 import os
 import datetime
 from functools import wraps
-import hashlib
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "clave_super_secreta_para_panel_tecnicos_2025")
+app.secret_key = os.environ.get("SECRET_KEY", "clave_super_secreta_panel_tecnicos_2025")
 
-# PostgreSQL desde variable de entorno (misma base que el taller)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
     return psycopg2.connect(DATABASE_URL)
 
-# Configuración de técnicos actualizada
+# Configuración de técnicos
 TECNICOS_VALIDOS = {
     "Franyer": {"password": "franyer123", "nombre_completo": "Franyer Pérez"},
     "Wilfredo": {"password": "wilfredo123", "nombre_completo": "Wilfredo Gómez"},
@@ -22,20 +20,16 @@ TECNICOS_VALIDOS = {
     "Santiago": {"password": "santiago123", "nombre_completo": "Santiago Rodríguez"}
 }
 
-# Nueva función para calcular comisión por tarjeta
 def calcular_comision(presupuesto):
-    """
-    Calcula la comisión según el presupuesto:
-    - Menos de 50: 5
-    - 60 o más: 10
-    """
+    """Comisión solo para entregados: <50=5, >=60=10"""
+    if presupuesto is None:
+        return 0
     if presupuesto < 50:
         return 5
     elif presupuesto >= 60:
         return 10
     else:
-        # Entre 50 y 59.99: comisión proporcional (opcional, ajustamos a 7.5)
-        return 7.5
+        return 0  # Entre 50 y 59.99 no tiene comisión
 
 def requiere_autenticacion_tecnico(f):
     @wraps(f)
@@ -45,7 +39,7 @@ def requiere_autenticacion_tecnico(f):
         return f(*args, **kwargs)
     return decorador
 
-# HTML Login para técnicos
+# HTML Login
 LOGIN_TECNICO = '''
 <!DOCTYPE html>
 <html>
@@ -54,13 +48,15 @@ LOGIN_TECNICO = '''
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Panel Técnicos - Login</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; display: flex; justify-content: center; align-items: center; }
-        .login-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 320px; }
-        h1 { text-align: center; color: #333; margin-bottom: 30px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #5a67d8; }
-        .error { color: red; text-align: center; margin-top: 10px; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .login-container { background: white; padding: 45px; border-radius: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); width: 380px; text-align: center; }
+        h1 { color: #1a1a2e; margin-bottom: 30px; font-size: 32px; }
+        input { width: 100%; padding: 14px; margin: 12px 0; border: 2px solid #e0e0e0; border-radius: 50px; font-size: 16px; transition: 0.3s; }
+        input:focus { outline: none; border-color: #667eea; }
+        button { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; }
+        button:hover { transform: scale(1.02); }
+        .error { color: #e74c3c; margin-top: 15px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -79,108 +75,120 @@ LOGIN_TECNICO = '''
 </html>
 '''
 
-# HTML Dashboard del técnico (ACTUALIZADO con tarifas)
+# HTML Dashboard (solo entregados, diseño moderno)
 DASHBOARD_TECNICO = '''
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Panel de {{ tecnico }}</title>
+    <title>Panel - {{ tecnico_nombre }}</title>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #f0f2f5; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 20px; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
-        .card h3 { margin: 0; color: #666; font-size: 14px; }
-        .card .number { font-size: 36px; font-weight: bold; margin: 10px 0; color: #667eea; }
-        .card .total { font-size: 24px; font-weight: bold; color: #48bb78; }
-        table { width: 100%; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #667eea; color: white; }
-        tr:hover { background: #f5f5f5; }
-        .estado-lista { color: green; font-weight: bold; }
-        .estado-entregado { color: blue; font-weight: bold; }
-        .logout { float: right; background: #e53e3e; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
-        .logout:hover { background: #c53030; }
-        .btn { display: inline-block; background: #48bb78; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; }
-        .btn:hover { background: #38a169; }
-        .tabla-comisiones { margin-top: 20px; background: white; padding: 15px; border-radius: 10px; }
-        .tabla-comisiones h3 { margin-top: 0; }
-        .info-comision { font-size: 12px; color: #666; margin-top: 10px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 28px; margin: 0; }
+        .header p { font-size: 14px; opacity: 0.9; margin-top: 5px; }
+        .logout { float: right; background: #e74c3c; color: white; padding: 10px 25px; text-decoration: none; border-radius: 50px; font-weight: bold; transition: 0.3s; }
+        .logout:hover { background: #c0392b; transform: scale(1.02); }
+        .container { max-width: 1400px; margin: 30px auto; padding: 0 20px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 40px; }
+        .card { background: white; border-radius: 20px; padding: 30px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); transition: 0.3s; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
+        .card h3 { color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
+        .card .number { font-size: 52px; font-weight: bold; color: #667eea; margin: 10px 0; }
+        .card .comision { font-size: 36px; font-weight: bold; color: #4caf50; }
+        .seccion { background: white; border-radius: 20px; padding: 25px; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .seccion h2 { color: #1a1a2e; margin-bottom: 20px; font-size: 22px; border-left: 4px solid #667eea; padding-left: 15px; }
+        .tabla-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { border: 1px solid #e0e0e0; padding: 12px 10px; text-align: left; }
+        th { background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: bold; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        tr:hover { background: #f1f1f1; }
+        .comision-cell { color: #4caf50; font-weight: bold; }
+        .fecha { font-size: 12px; color: #666; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        @media (max-width: 768px) {
+            .stats { grid-template-columns: 1fr; }
+            th, td { font-size: 11px; padding: 8px 5px; }
+            .header h1 { font-size: 20px; }
+            .card .number { font-size: 36px; }
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🔧 Panel de Control - {{ tecnico_nombre }}</h1>
+        <p>Elvin Technology - Equipos Entregados</p>
         <a href="/logout" class="logout">Cerrar Sesión</a>
     </div>
     <div class="container">
         <div class="stats">
             <div class="card">
-                <h3>📋 Total Reparaciones</h3>
-                <div class="number">{{ total_reparaciones }}</div>
+                <h3>📋 Equipos Entregados</h3>
+                <div class="number">{{ total_entregados }}</div>
             </div>
             <div class="card">
-                <h3>✅ Reparaciones Entregadas</h3>
-                <div class="number">{{ entregadas }}</div>
-            </div>
-            <div class="card">
-                <h3>💰 Total Facturado</h3>
-                <div class="total">${{ total_facturado }}</div>
-            </div>
-            <div class="card">
-                <h3>💵 Comisión por Tarjeta</h3>
-                <div class="total">${{ comision }}</div>
+                <h3>💰 Comisión Total</h3>
+                <div class="comision">${{ comision_total }}</div>
             </div>
         </div>
         
-        <div class="tabla-comisiones">
-            <h3>📊 Tarifas de Comisión por Tarjeta</h3>
-            <table style="width: 100%; margin-top: 10px;">
-                <thead>
-                    <tr><th>Presupuesto</th><th>Comisión por Tarjeta</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td>Menos de $50</td><td><strong>$5</strong></td></tr>
-                    <tr><td>$50 a $59.99</td><td><strong>$7.50</strong></td></tr>
-                    <tr><td>$60 o más</td><td><strong>$10</strong></td></tr>
-                </tbody>
-            </table>
-            <div class="info-comision">💡 La comisión se calcula automáticamente según el presupuesto de cada ticket entregado.</div>
+        <div class="seccion">
+            <h2>📋 Historial de Equipos Entregados</h2>
+            <div class="tabla-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Cliente</th>
+                            <th>Equipo</th>
+                            <th>Marca</th>
+                            <th>Presupuesto</th>
+                            <th>Comisión</th>
+                            <th>Fecha Entrega</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tickets %}
+                        <tr>
+                            <td>{{ t[0] }}</a></td>
+                            <td>{{ t[1] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <table><td>{{ t[2] }}</a></td>
+                            <tr><td>{{ t[3] if t[3] else '-' }}</a></td>
+                            <td>${{ "%.2f"|format(t[4]) if t[4] else 0 }}</a></td>
+                            <td class="comision-cell">${{ t[5] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <td class="fecha">{{ t[6][:10] if t[6] else '-' }}</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if not tickets %}
+            <p style="text-align: center; color: #666; padding: 40px;">No hay equipos entregados aún.</p>
+            {% endif %}
         </div>
         
-        <h2>📋 Mis Reparaciones</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Código</th>
-                    <th>Cliente</th>
-                    <th>Equipo</th>
-                    <th>Estado</th>
-                    <th>Presupuesto</th>
-                    <th>Comisión</th>
-                    <th>Fecha Entrada</th>
-                    <th>Fecha Entrega</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in reparaciones %}
-                <tr>
-                    <td>{{ r[0] }}</td>
-                    <td>{{ r[1] }}</td>
-                    <td>{{ r[2] }} {{ r[3] }}</td>
-                    <td class="estado-{{ r[4] }}">{{ r[4].replace('_', ' ').upper() }}</td>
-                    <td>${{ r[5] if r[5] else 0 }}</td>
-                    <td>${{ r[8] if r[8] else 0 }}</td>
-                    <td>{{ r[6][:10] if r[6] else '' }}</td>
-                    <td>{{ r[7][:10] if r[7] else 'Pendiente' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <a href="/exportar" class="btn">📥 Exportar a CSV</a>
+        <div class="seccion">
+            <h2>💰 Tarifas de Comisión</h2>
+            <div class="tabla-container">
+                <table>
+                    <thead>
+                        <tr><th>Presupuesto</th><th>Comisión</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Menos de $50</td><td>$5</td></tr>
+                        <tr><td>$60 o más</td><td>$10</td></tr>
+                        <tr style="background: #f8f9fa;"><td>Entre $50 y $59.99</td><td>$0</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Elvin Technology - Sistema de Gestión de Taller</p>
+        </div>
     </div>
 </body>
 </html>
@@ -209,107 +217,37 @@ def panel_tecnico():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Obtener todas las reparaciones de este técnico
+    # Obtener SOLO tickets ENTREGADOS de este técnico
     cursor.execute('''
-        SELECT codigo, cliente_nombre, equipo, marca, estado, presupuesto, fecha_entrada, fecha_salida
+        SELECT codigo, cliente_nombre, equipo, marca, presupuesto, fecha_salida
         FROM reparaciones 
-        WHERE tecnico = %s 
-        ORDER BY id DESC
+        WHERE tecnico = %s AND estado = 'entregado'
+        ORDER BY fecha_salida DESC
     ''', (tecnico,))
-    reparaciones_raw = cursor.fetchall()
+    tickets_raw = cursor.fetchall()
     
-    # Calcular comisión por cada reparación entregada
-    reparaciones = []
-    for r in reparaciones_raw:
-        comision = 0
-        if r[4] == 'entregado' and r[5]:  # estado entregado y presupuesto existe
-            comision = calcular_comision(r[5])
-        reparaciones.append((r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], comision))
-    
-    # Estadísticas
-    cursor.execute('''
-        SELECT COUNT(*) FROM reparaciones WHERE tecnico = %s
-    ''', (tecnico,))
-    total_reparaciones = cursor.fetchone()[0] or 0
-    
-    cursor.execute('''
-        SELECT COUNT(*) FROM reparaciones WHERE tecnico = %s AND estado = 'entregado'
-    ''', (tecnico,))
-    entregadas = cursor.fetchone()[0] or 0
-    
-    cursor.execute('''
-        SELECT SUM(presupuesto) FROM reparaciones WHERE tecnico = %s AND estado = 'entregado'
-    ''', (tecnico,))
-    total_facturado = cursor.fetchone()[0] or 0
-    
-    # Calcular comisión total usando la nueva tarifa
-    cursor.execute('''
-        SELECT presupuesto FROM reparaciones WHERE tecnico = %s AND estado = 'entregado' AND presupuesto IS NOT NULL
-    ''', (tecnico,))
-    presupuestos = cursor.fetchall()
-    
+    # Calcular comisión por cada ticket entregado
+    tickets = []
     comision_total = 0
-    for p in presupuestos:
-        comision_total += calcular_comision(p[0])
+    for t in tickets_raw:
+        comision = calcular_comision(t[4])  # presupuesto es t[4]
+        comision_total += comision
+        tickets.append((t[0], t[1], t[2], t[3], t[4], comision, t[5]))
+    
+    total_entregados = len(tickets)
     
     conn.close()
     
     return render_template_string(DASHBOARD_TECNICO, 
-                                   tecnico=tecnico,
                                    tecnico_nombre=session['tecnico_nombre_completo'],
-                                   reparaciones=reparaciones,
-                                   total_reparaciones=total_reparaciones,
-                                   entregadas=entregadas,
-                                   total_facturado=round(total_facturado, 2),
-                                   comision=comision_total)
+                                   tickets=tickets,
+                                   total_entregados=total_entregados,
+                                   comision_total=comision_total)
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for('login_tecnico'))
-
-@app.route("/exportar")
-@requiere_autenticacion_tecnico
-def exportar_csv():
-    import csv
-    from io import StringIO
-    from flask import Response
-    
-    tecnico = session['tecnico_nombre']
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT codigo, cliente_nombre, equipo, marca, falla, estado, presupuesto, fecha_entrada, fecha_salida
-        FROM reparaciones 
-        WHERE tecnico = %s 
-        ORDER BY id DESC
-    ''', (tecnico,))
-    reparaciones = cursor.fetchall()
-    conn.close()
-    
-    # Crear CSV en memoria
-    si = StringIO()
-    cw = csv.writer(si)
-    cw.writerow(['Código', 'Cliente', 'Equipo', 'Marca', 'Falla', 'Estado', 'Presupuesto', 'Comisión', 'Fecha Entrada', 'Fecha Salida'])
-    
-    for r in reparaciones:
-        comision = 0
-        if r[5] == 'entregado' and r[6]:
-            comision = calcular_comision(r[6])
-        cw.writerow([r[0], r[1], r[2], r[3], r[4], r[5], r[6], comision, r[7], r[8] if r[8] else ''])
-    
-    output = si.getvalue()
-    
-    return Response(
-        output,
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment;filename=reparaciones_{tecnico}_{datetime.datetime.now().strftime('%Y%m%d')}.csv"}
-    )
-
-@app.route("/ping")
-def ping():
-    return "OK", 200
 
 @app.route("/")
 def index():
