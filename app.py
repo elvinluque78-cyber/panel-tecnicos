@@ -138,10 +138,8 @@ DASHBOARD_TECNICO = '''
                     <thead>
                         <tr>
                             <th>Código</th>
-                            <th>Cliente</th>
                             <th>Equipo</th>
                             <th>Marca</th>
-                            <th>Presupuesto</th>
                             <th>Comisión</th>
                             <th>Fecha Entrega</th>
                         </tr>
@@ -149,13 +147,11 @@ DASHBOARD_TECNICO = '''
                     <tbody>
                         {% for t in tickets %}
                         <tr>
-                            <td>{{ t[0] }}</td>
-                            <td>{{ t[1] }}</td>
-                            <td>{{ t[2] }}</td>
-                            <td>{{ t[3] if t[3] else '-' }}</td>
-                            <td>${{ "%.2f"|format(t[4]) if t[4] else 0 }}</td>
-                            <td class="comision-cell">${{ t[5] }}</a></td>
-                            <td class="fecha">{{ t[6][:10] if t[6] else '-' }}</a></td>
+                            <td>{{ t[0] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <td>{{ t[2] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <td>{{ t[3] if t[3] else '-' }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <td class="comision-cell">${{ t[5] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <td class="fecha">{{ t[6][:10] if t[6] else '-' }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -169,13 +165,13 @@ DASHBOARD_TECNICO = '''
         <div class="seccion">
             <h2>💰 Tarifas de Comisión</h2>
             <div class="tabla-container">
-                <table>
+                </table>
                     <thead>
                         <tr><th>Presupuesto</th><th>Comisión</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>Menos de $50</td><td>$5</td></tr>
-                        <tr><td>$60 o más</td><td>$10</td></tr>
+                        <tr><td>Menos de $50</a></td><td>$5</a></td>
+                        <tr><td>$60 o más</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td><td>$10</a></a></td>
                     </tbody>
                 </table>
             </div>
