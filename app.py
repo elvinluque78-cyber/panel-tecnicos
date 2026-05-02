@@ -12,7 +12,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 def get_db():
     return psycopg2.connect(DATABASE_URL)
 
-# Configuración de técnicos
 TECNICOS_VALIDOS = {
     "Franyer": {"password": "franyer123", "nombre_completo": "Franyer Pérez"},
     "Wilfredo": {"password": "wilfredo123", "nombre_completo": "Wilfredo Gómez"},
@@ -21,7 +20,6 @@ TECNICOS_VALIDOS = {
 }
 
 def calcular_comision(presupuesto):
-    """Comisión solo para entregados: <50=5, >=60=10"""
     if presupuesto is None:
         return 0
     if presupuesto < 50:
@@ -29,7 +27,7 @@ def calcular_comision(presupuesto):
     elif presupuesto >= 60:
         return 10
     else:
-        return 0  # Entre 50 y 59.99 no tiene comisión
+        return 0
 
 def requiere_autenticacion_tecnico(f):
     @wraps(f)
@@ -39,7 +37,6 @@ def requiere_autenticacion_tecnico(f):
         return f(*args, **kwargs)
     return decorador
 
-# HTML Login
 LOGIN_TECNICO = '''
 <!DOCTYPE html>
 <html>
@@ -75,7 +72,6 @@ LOGIN_TECNICO = '''
 </html>
 '''
 
-# HTML Dashboard (solo entregados, diseño moderno)
 DASHBOARD_TECNICO = '''
 <!DOCTYPE html>
 <html>
@@ -85,7 +81,7 @@ DASHBOARD_TECNICO = '''
     <title>Panel - {{ tecnico_nombre }}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 0; }
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .header h1 { font-size: 28px; margin: 0; }
         .header p { font-size: 14px; opacity: 0.9; margin-top: 5px; }
@@ -100,7 +96,7 @@ DASHBOARD_TECNICO = '''
         .card .comision { font-size: 36px; font-weight: bold; color: #4caf50; }
         .seccion { background: white; border-radius: 20px; padding: 25px; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         .seccion h2 { color: #1a1a2e; margin-bottom: 20px; font-size: 22px; border-left: 4px solid #667eea; padding-left: 15px; }
-        .tabla-container { overflow-x: auto; }
+        .tabla-container { overflow-x: auto; width: 100%; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th, td { border: 1px solid #e0e0e0; padding: 12px 10px; text-align: left; }
         th { background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: bold; }
@@ -153,12 +149,12 @@ DASHBOARD_TECNICO = '''
                     <tbody>
                         {% for t in tickets %}
                         <tr>
-                            <td>{{ t[0] }}</a></td>
-                            <td>{{ t[1] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
-                            <table><td>{{ t[2] }}</a></td>
-                            <tr><td>{{ t[3] if t[3] else '-' }}</a></td>
-                            <td>${{ "%.2f"|format(t[4]) if t[4] else 0 }}</a></td>
-                            <td class="comision-cell">${{ t[5] }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                            <td>{{ t[0] }}</td>
+                            <td>{{ t[1] }}</td>
+                            <td>{{ t[2] }}</td>
+                            <td>{{ t[3] if t[3] else '-' }}</td>
+                            <td>${{ "%.2f"|format(t[4]) if t[4] else 0 }}</td>
+                            <td class="comision-cell">${{ t[5] }}</a></td>
                             <td class="fecha">{{ t[6][:10] if t[6] else '-' }}</a></td>
                         </tr>
                         {% endfor %}
@@ -180,7 +176,6 @@ DASHBOARD_TECNICO = '''
                     <tbody>
                         <tr><td>Menos de $50</td><td>$5</td></tr>
                         <tr><td>$60 o más</td><td>$10</td></tr>
-                        <tr style="background: #f8f9fa;"><td>Entre $50 y $59.99</td><td>$0</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -217,7 +212,6 @@ def panel_tecnico():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Obtener SOLO tickets ENTREGADOS de este técnico
     cursor.execute('''
         SELECT codigo, cliente_nombre, equipo, marca, presupuesto, fecha_salida
         FROM reparaciones 
@@ -226,11 +220,10 @@ def panel_tecnico():
     ''', (tecnico,))
     tickets_raw = cursor.fetchall()
     
-    # Calcular comisión por cada ticket entregado
     tickets = []
     comision_total = 0
     for t in tickets_raw:
-        comision = calcular_comision(t[4])  # presupuesto es t[4]
+        comision = calcular_comision(t[4])
         comision_total += comision
         tickets.append((t[0], t[1], t[2], t[3], t[4], comision, t[5]))
     
